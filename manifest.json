@@ -1,0 +1,12 @@
+{
+  "name": "Simulador de Huella Ecológica",
+  "short_name": "HuellaEco",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#4ade80",
+  "theme_color": "#16a34a",
+  "description": "Calcula tu huella ecológica.",
+  "icons": [
+    { "src": "favicon.ico", "sizes": "64x64", "type": "image/x-icon" }
+  ]
+}
