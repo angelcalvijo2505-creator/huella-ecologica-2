@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Huella Ecológica</title>
+    
+    <!-- PWA Manifest & Icons --><link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50,0A50,50,0,1,0,50,100A50,50,0,1,0,50,0ZM50,20A30,30,0,1,1,20,50A30,30,0,0,1,50,20Z' fill='%2316a34a'/><path d='M70,30A15,15,0,0,0,55,45L45,55A15,15,0,0,0,30,70V85L85,30V15A15,15,0,0,0,70,30Z' fill='%2310b981'/></svg>">
+    
+    <script>
+        // Service Worker para la funcionalidad PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                // Usamos un service worker vacío para cumplir el requisito de PWA
+                // En una app real, este archivo manejaría el caché offline.
+                // Por ahora, solo lo registramos.
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(reg => {
+                        console.log('Service Worker registrado con éxito.');
+                    })
+                    .catch(err => {
+                        console.log('Error al registrar el Service Worker:', err);
+                    });
+            });
+        }
+    </script>
+    
+    <!-- Ya no se importan SDKs de Firebase -->
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilos generales y animaciones */
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-image: linear-gradient(to bottom right, #4ade80, #16a34a);
+        }
+        .container {
+            max-width: 600px;
+        }
+        .card {
+            background-color: #ffffff;
+            box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.2);
+            position: relative;
+            overflow: hidden;
+            z-index: 10;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: -150px;
+            right: -150px;
+            width: 300px;
+            height: 300px;
+            background-color: #d1fae5;
+            border-radius: 50%;
+            opacity: 0.5;
+            z-index: 5;
+        }
+        .btn-primary {
+            background-image: linear-gradient(to right, #6b8e23, #556b2f);
+            color: #d1fae5;
+            font-weight: 700;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(107, 142, 35, 0.4);
+        }
+        .btn-primary:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 20px rgba(107, 142, 35, 0.6);
+        }
+        .option-btn {
+            background-color: #f0fdf4;
+            border: 1px solid #d1fae5;
+            color: #1f2937;
+            transition: all 0.2s;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+        .option-btn:hover {
+            background-color: #e0f2fe;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .advice-list li::before {
+            content: "•";
+            color: #38a169;
+            font-weight: bold;
+            display: inline-block;
+            width: 1em;
+            margin-left: -1em;
+        }
+        .stat-bar-container {
+            cursor: pointer;
+            transition: transform 0.2s ease-in-out;
+        }
+        .stat-bar-container:hover {
+            transform: scale(1.02);
+        }
+        .stat-bar {
+            height: 1.5rem;
+            border-radius: 9999px;
+            background-color: #d1fae5;
+        }
+        .stat-fill {
+            height: 100%;
+            border-radius: 9999px;
+            background-color: #38a169;
+            transition: width 0.5s ease-in-out;
+        }
+        
+        .screen {
+            transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        .screen.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            z-index: 1000;
+        }
+        .modal.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            max-width: 90%;
+            animation: pop-in 0.3s ease-out;
+        }
+        @keyframes pop-in {
+            0% { transform: scale(0.9); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div id="app-container" class="container mx-auto p-8 rounded-3xl card text-center">
+        <!-- Contenedor para las diferentes vistas de la app --><div id="start-screen" class="screen">
+            <!-- Logo SVG integrado --><div class="mb-6 flex justify-center">
+                <svg width="80" height="80" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="100" height="100" rx="20" fill="#D1FAE5"/>
+                    <path d="M50 15L30 35H40V75H60V35H70L50 15Z" fill="#10B981"/>
+                    <path d="M25 85H75L65 75H35L25 85Z" fill="#047857"/>
+                </svg>
+            </div>
+            
+            <h1 class="text-4xl font-bold text-gray-800 mb-4">Calcula Tu Huella Ecológica</h1>
+            <p class="text-lg text-gray-600 mb-8 font-light">
+                Descubre cómo tus hábitos impactan el planeta. ¡Responde a unas pocas preguntas y recibe consejos para un futuro más sostenible!
+            </p>
+            <!-- Eliminado el auth-status -->
+            <div class="flex flex-col space-y-4 sm:flex-row sm:space-x-4 sm:space-y-0 justify-center">
+                <button id="start-btn" class="btn-primary font-bold py-3 px-8 rounded-full shadow-lg">
+                    Comenzar
+                </button>
+            </div>
+        </div>
+
+        <div id="question-screen" class="screen hidden">
+            <h2 id="question-text" class="text-2xl font-semibold text-gray-800 mb-6"></h2>
+            <div id="options-container" class="flex flex-col space-y-4">
+                <!-- Opciones se insertarán aquí por JavaScript --></div>
+            <p class="text-sm text-gray-500 mt-4" id="progress-text"></p>
+        </div>
+
+        <div id="results-screen" class="screen hidden">
+            <h2 class="text-3xl font-bold text-gray-800 mb-4">¡Tus Resultados!</h2>
+            <div class="mb-6">
+                <p class="text-lg text-gray-600 mb-2">Tu puntaje de huella ecológica es:</p>
+                <p id="final-score" class="text-5xl font-extrabold text-emerald-600 mb-4"></p>
+                <!-- Eliminado score-comparison-text -->
+                <p id="score-interpretation" class="text-xl text-gray-800 font-semibold"></p>
+            </div>
+
+            <!-- Eliminada la sección de Estadísticas Globales -->
+            
+            <div class="bg-gray-50 p-6 rounded-xl text-left mb-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-2">Estadísticas por categoría:</h3>
+                <div id="stats-container" class="space-y-4">
+                    <!-- Las estadísticas se insertarán aquí por JavaScript --></div>
+            </div>
+            <div class="bg-gray-50 p-6 rounded-xl text-left mb-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-2">Consejos para mejorar tu huella:</h3>
+                <ul id="advice-list" class="list-disc list-inside text-gray-600 space-y-2 advice-list">
+                    <!-- Los consejos se insertarán aquí por JavaScript --></ul>
+            </div>
+            <div class="flex flex-col space-y-4 sm:flex-row sm:space-x-4 sm:space-y-0 justify-center">
+                <!-- Eliminado el botón Ver Historial -->
+                <button id="restart-btn" class="btn-primary font-bold py-3 px-8 rounded-full shadow-lg">
+                    Volver a Empezar
+                </button>
+            </div>
+        </div>
+
+        <!-- Eliminada la pantalla de Historial -->
+    </div>
+
+    <!-- Modal para consejos --><div id="advice-modal" class="modal">
+        <div class="modal-content text-center">
+            <h3 id="modal-category-title" class="text-2xl font-bold text-gray-800 mb-4"></h3>
+            <p id="modal-advice-text" class="text-lg text-gray-600 mb-6"></p>
+            <button id="close-modal-btn" class="bg-gray-200 text-gray-800 font-bold py-2 px-6 rounded-full hover:bg-gray-300">
+                Cerrar
+            </button>
+        </div>
+    </div>
+
+    <script type="module">
+        // No hay importaciones de Firebase
+        
+        // --- PREGUNTAS ENFOCADAS EN ADOLESCENTES ---
+        const questions = [
+            // Transporte
+            { question: "1. ¿Cómo vas al colegio/universidad la mayoría de los días?", options: [
+                { text: "Mis papás me llevan en coche (solo yo)", score: 20, category: "transporte" },
+                { text: "En ruta escolar (bus/van)", score: 10, category: "transporte" },
+                { text: "Transporte público (bus/Transmilenio)", score: 8, category: "transporte" },
+                { text: "Bicicleta, patineta o caminando", score: 1, category: "transporte" }
+            ]},
+            { question: "2. Para salir con tus amigos los fines de semana, ¿cómo te mueves?", options: [
+                { text: "Casi siempre en coche (propio o de mis papás/amigos)", score: 15, category: "transporte" },
+                { text: "Usamos 'apps' de transporte (Uber, Didi) para todo", score: 12, category: "transporte" },
+                { text: "Transporte público o caminamos si es cerca", score: 5, category: "transporte" },
+                { text: "Bicicleta o patineta", score: 2, category: "transporte" }
+            ]},
+            // Alimentación
+            { question: "3. ¿Qué tipo de 'snacks' o 'mecato' comes usualmente?", options: [
+                { text: "Comida rápida (hamburguesa, pizza) varias veces a la semana", score: 15, category: "alimentacion" },
+                { text: "Paquetes (papitas, galletas) y gaseosa casi diario", score: 10, category: "alimentacion" },
+                { text: "Fruta o 'snacks' preparados en casa", score: 3, category: "alimentacion" },
+                { text: "Trato de evitar el 'mecato'", score: 1, category: "alimentacion" }
+            ]},
+            { question: "4. En tus comidas principales (almuerzo/cena), ¿con qué frecuencia comes carne roja o pollo?", options: [
+                { text: "En ambas comidas, casi todos los días", score: 20, category: "alimentacion" },
+                { text: "Una vez al día, la mayoría de los días", score: 12, category: "alimentacion" },
+                { text: "Algunas veces a la semana", score: 6, category: "alimentacion" },
+                { text: "Casi nunca / Soy vegetariano", score: 2, category: "alimentacion" }
+            ]},
+            // Agua
+            { question: "5. Para tomar agua durante el día, ¿qué usas?", options: [
+                { text: "Compro botellas de agua/gaseosa/jugo", score: 15, category: "agua" },
+                { text: "A veces compro, a veces uso termo", score: 8, category: "agua" },
+                { text: "Uso un termo/botella reutilizable que relleno en casa", score: 2, category: "agua" }
+            ]},
+            { question: "6. ¿Cuánto te demoras en la ducha?", options: [
+                { text: "Más de 15 minutos (pongo música y me relajo)", score: 15, category: "agua" },
+                { text: "Entre 8 y 15 minutos", score: 10, category: "agua" },
+                { text: "Menos de 8 minutos", score: 5, category: "agua" },
+                { text: "Menos de 5 minutos (ducha rápida)", score: 2, category: "agua" }
+            ]},
+            // Energía
+            { question: "7. ¿Dejas tu computador, consola de videojuegos o TV en 'stand-by' (reposo) o encendidos cuando no los usas?", options: [
+                { text: "Casi siempre, listos para usar", score: 10, category: "energia" },
+                { text: "A veces, se me olvida apagarlos", score: 6, category: "energia" },
+                { text: "Casi nunca, los apago completamente", score: 2, category: "energia" },
+                { text: "Uso una regleta para apagar todo a la vez", score: 1, category: "energia" }
+            ]},
+            { question: "8. ¿Dejas los cargadores (celular, portátil) enchufados a la pared aunque no estés cargando nada?", options: [
+                { text: "Sí, siempre están enchufados", score: 8, category: "energia" },
+                { text: "Algunos sí, otros no", score: 4, category: "energia" },
+                { text: "No, los desenchufo cuando termino de usarlos", score: 1, category: "energia" }
+            ]},
+            // Consumo
+            { question: "9. ¿Con qué frecuencia pides un celular, audífonos o 'gadget' nuevo?", options: [
+                { text: "Cada año, quiero tener lo último", score: 15, category: "consumo" },
+                { text: "Cada 2 años más o menos", score: 8, category: "consumo" },
+                { text: "Solo cuando el que tengo se daña y no tiene arreglo", score: 3, category: "consumo" }
+            ]},
+            { question: "10. ¿Cómo es tu estilo para comprar ropa?", options: [
+                { text: "Compro ropa nueva de 'fast fashion' (Shein, H&M, Zara) con frecuencia", score: 15, category: "consumo" },
+                { text: "Compro ropa nueva un par de veces al año", score: 8, category: "consumo" },
+                { text: "Prefiero comprar ropa de segunda o 'vintage'", score: 3, category: "consumo" },
+                { text: "Casi no compro, uso la que tengo o intercambio con amigos", score: 1, category: "consumo" }
+            ]},
+            // Residuos
+            { question: "11. En el colegio o en tu casa, ¿separas la basura?", options: [
+                { text: "No, todo va a la misma caneca", score: 15, category: "residuos" },
+                { text: "A veces, si me acuerdo o si hay canecas separadas", score: 8, category: "residuos" },
+                { text: "Sí, separo juiciosamente lo reciclable (blanca) de lo ordinario (negra)", score: 3, category: "residuos" }
+            ]},
+            { question: "12. Cuando pides domicilio o compras algo para llevar (un café, un helado), ¿qué haces con los empaques?", options: [
+                { text: "Pido normal, uso los pitillos, cubiertos y empaques que me dan", score: 10, category: "residuos" },
+                { text: "Trato de pedir sin pitillo (popote) o sin cubiertos plásticos", score: 5, category: "residuos" },
+                { text: "Evito pedir domicilios por los empaques, o llevo mi propio vaso/taza", score: 2, category: "residuos" }
+            ]}
+        ];
+
+
+        // Consejos por categoría (sin cambios)
+        const advice = {
+            transporte: "Prioriza la movilidad sostenible. Intenta reemplazar los viajes en avión por tren o bus cuando sea posible, y para trayectos cortos, usa la bicicleta o camina. El viaje compartido reduce drásticamente tu huella.",
+            alimentacion: "Reduce al mínimo el consumo de carne roja y opta por proteínas vegetales. Es fundamental priorizar productos agrícolas locales y de temporada para minimizar las emisiones por transporte y almacenamiento.",
+            energia: "Monitorea tu consumo de energía en casa. Desenchufla los cargadores y dispositivos que no uses ('vampiros de energía'). Considera invertir en tecnologías de bajo consumo y apoya las fuentes de energía limpia.",
+            residuos: "El reciclaje de electrónicos y pilas es crucial. Busca puntos específicos de recolección para residuos peligrosos (RAEE). Evita los envases de un solo uso, especialmente de comida a domicilio, usando tus propios contenedores.",
+            agua: "Reduce el tiempo en la ducha a menos de 5 minutos y cierra el grifo mientras te enjabonas. Utiliza filtros de agua en casa para eliminar la necesidad de comprar botellas de plástico, reduciendo tu huella hídrica y de residuos.",
+            consumo: "Adopta el principio de 'consumo consciente'. Rechaza la moda rápida y compra ropa de segunda mano. Repara y reutiliza la tecnología antes de desecharla, y opta por marcas con una cadena de suministro transparente."
+        };
+
+        // Elementos de la interfaz de usuario
+        const startScreen = document.getElementById('start-screen');
+        const questionScreen = document.getElementById('question-screen');
+        const resultsScreen = document.getElementById('results-screen');
+        // Eliminado historyScreen
+        const startBtn = document.getElementById('start-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        // Eliminado viewHistoryBtn
+        const questionText = document.getElementById('question-text');
+        const optionsContainer = document.getElementById('options-container');
+        const progressText = document.getElementById('progress-text');
+        const finalScoreText = document.getElementById('final-score');
+        // Eliminado scoreComparisonText
+        const scoreInterpretationText = document.getElementById('score-interpretation');
+        const adviceList = document.getElementById('advice-list');
+        const statsContainer = document.getElementById('stats-container');
+        // Eliminado historyList y backToResultsBtn
+        const adviceModal = document.getElementById('advice-modal');
+        const modalCategoryTitle = document.getElementById('modal-category-title');
+        const modalAdviceText = document.getElementById('modal-advice-text');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        // Eliminado globalStatsContainer
+        
+        let currentQuestionIndex = 0;
+        let totalScore = 0;
+        let categoriesScores = {};
+
+        // Función para cambiar de pantalla
+        function showScreen(screenToShow) {
+            const screens = [startScreen, questionScreen, resultsScreen]; // Simplificada
+            screens.forEach(screen => {
+                if (screen === screenToShow) {
+                    screen.classList.remove('hidden');
+                    setTimeout(() => screen.classList.add('visible'), 10);
+                } else {
+                    screen.classList.add('hidden');
+                    screen.classList.remove('visible');
+                }
+            });
+        }
+
+        // Carga la siguiente pregunta o muestra los resultados
+        function loadQuestion() {
+            if (currentQuestionIndex < questions.length) {
+                const currentQuestion = questions[currentQuestionIndex];
+                questionText.textContent = currentQuestion.question;
+                optionsContainer.innerHTML = '';
+                
+                currentQuestion.options.forEach(option => {
+                    const button = document.createElement('button');
+                    button.textContent = option.text;
+                    button.className = 'option-btn font-medium py-3 px-6 rounded-full shadow-sm hover:scale-105';
+                    button.onclick = () => handleAnswer(option.score, option.category);
+                    optionsContainer.appendChild(button);
+                });
+
+                progressText.textContent = `Pregunta ${currentQuestionIndex + 1} de ${questions.length}`;
+            } else {
+                showResultsScreen();
+            }
+        }
+
+        // Maneja la respuesta del usuario y avanza a la siguiente pregunta
+        async function handleAnswer(score, category) {
+            totalScore += score;
+            categoriesScores[category] = (categoriesScores[category] || 0) + score;
+            currentQuestionIndex++;
+            loadQuestion();
+        }
+
+        // Eliminada la función fetchGlobalStats
+
+        // Muestra la pantalla de resultados (sin lógica de guardado)
+        async function showResultsScreen() {
+            showScreen(resultsScreen);
+
+            finalScoreText.textContent = totalScore;
+            
+            // --- INTERPRETACIÓN DE PUNTAJE ACTUALIZADA ---
+            if (totalScore <= 60) { 
+                scoreInterpretationText.textContent = "¡Excelente! Tu huella es muy baja. Sigue con tus buenos hábitos.";
+            } else if (totalScore <= 120) { 
+                scoreInterpretationText.textContent = "Tu huella es moderada. ¡Hay oportunidades para mejorar!";
+            } else { 
+                scoreInterpretationText.textContent = "Tu huella es alta. ¡Es hora de hacer cambios importantes!";
+            }
+            
+            statsContainer.innerHTML = '';
+            
+            // --- VALORES MÁXIMOS ACTUALIZADOS ---
+            const maxPossibleScorePerCategory = {
+                transporte: 35, // P1(20) + P2(15)
+                alimentacion: 35, // P3(15) + P4(20)
+                energia: 18, // P7(10) + P8(8)
+                residuos: 25, // P11(15) + P12(10)
+                agua: 30, // P5(15) + P6(15)
+                consumo: 30 // P9(15) + P10(15)
+            };
+
+            for (const category in categoriesScores) {
+                const score = categoriesScores[category];
+                // Asegurarse de que la categoría exista en maxPossibleScorePerCategory
+                const maxScore = maxPossibleScorePerCategory[category] || score; // Fallback si no está definida
+                let percentage = 0;
+                if (maxScore > 0) {
+                    percentage = (score / maxScore) * 100;
+                }
+
+                const statDiv = document.createElement('div');
+                statDiv.className = 'flex flex-col space-y-2 stat-bar-container';
+                statDiv.setAttribute('data-category', category);
+
+                const title = document.createElement('span');
+                title.className = 'text-sm font-medium w-full text-left';
+                title.textContent = `${category.charAt(0).toUpperCase() + category.slice(1)}`;
+                
+                const barWrapper = document.createElement('div');
+                barWrapper.className = 'stat-bar w-full';
+                barWrapper.innerHTML = `<div class="stat-fill" style="width: ${percentage}%"></div>`;
+
+                statDiv.appendChild(title);
+                statDiv.appendChild(barWrapper);
+                statsContainer.appendChild(statDiv);
+            }
+
+            // Generar consejos personalizados para cada categoría
+            adviceList.innerHTML = '';
+            if (totalScore <= 60) { // Ajustado
+                const li = document.createElement('li');
+                li.textContent = "¡Felicidades! Tu huella es muy baja. Continúa con tus excelentes hábitos sostenibles y no dejes de inspirar a los demás.";
+                adviceList.appendChild(li);
+            } else {
+                // Ordenar categorías por puntaje (de mayor a menor)
+                const sortedCategories = Object.keys(categoriesScores).sort((a, b) => {
+                    return categoriesScores[b] - categoriesScores[a];
+                });
+
+                // Mostrar consejos para las categorías con puntaje
+                sortedCategories.forEach(category => {
+                    if (categoriesScores[category] > 0 && advice[category]) {
+                        const li = document.createElement('li');
+                        li.innerHTML = `<span class="font-bold">${category.charAt(0).toUpperCase() + category.slice(1)}:</span> ${advice[category]}`;
+                        adviceList.appendChild(li);
+                    }
+                });
+            }
+
+            // Eliminada toda la lógica de guardado en Firebase
+        }
+
+        // Eliminadas las funciones showHistoryScreen y fetchHistory
+        
+        // Muestra el modal de consejos
+        function showAdviceModal(category) {
+            const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
+            modalCategoryTitle.textContent = `Consejos sobre ${categoryName}`;
+            modalAdviceText.textContent = advice[category];
+            adviceModal.classList.add('visible');
+        }
+
+        // Cierra el modal de consejos
+        function closeAdviceModal() {
+            adviceModal.classList.remove('visible');
+        }
+
+        // Event Listeners
+        startBtn.addEventListener('click', () => {
+            currentQuestionIndex = 0;
+            totalScore = 0;
+            categoriesScores = {};
+            showScreen(questionScreen);
+            loadQuestion();
+        });
+
+        restartBtn.addEventListener('click', () => {
+            currentQuestionIndex = 0;
+            totalScore = 0;
+            categoriesScores = {};
+            showScreen(startScreen);
+        });
+
+        // Eliminados los listeners de historial
+
+        closeModalBtn.addEventListener('click', closeAdviceModal);
+
+        statsContainer.addEventListener('click', (event) => {
+            const statBarContainer = event.target.closest('.stat-bar-container');
+            if (statBarContainer) {
+                const category = statBarContainer.getAttribute('data-category');
+                showAdviceModal(category);
+            }
+        });
+
+        window.onload = () => {
+            showScreen(startScreen);
+        };
+    </script>
+</body>
+</html>
